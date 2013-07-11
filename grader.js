@@ -25,19 +25,24 @@
 var fs = require('fs');
 var program = require('commander');
 var cheerio = require('cheerio');
-var HTMLFILE_DEFAULT = "index.html";
+var rest = require('restler');
+var console = require('console');
+//var HTMLFILE_DEFAULT = "index.html";
+//var URL_DEFAULT = "";
 var CHECKSFILE_DEFAULT = "checks.json";
 
 var assertFileExists = function(infile) {
+
     var instr = infile.toString();
 
     if (!fs.existsSync(instr)) {
-        console.log("%s does not exist. Exiting.", instr);
-        process.exit(1);    // http://nodejs.org/api/process.html#process_process_exit_code
+	console.error("The file %s does not exist. Exiting.", instr);
+	process.exit(1);    // http://nodejs.org/api/process.html#process_process_exit_code
     }
 
     return instr;
 };
+
 
 var cheerioHtmlFile = function(htmlfile) {
     return cheerio.load(fs.readFileSync(htmlfile));
@@ -48,16 +53,50 @@ var loadChecks = function(checksfile) {
 };
 
 var checkHtmlFile = function(htmlfile, checksfile) {
+
     $ = cheerioHtmlFile(htmlfile);
     var checks = loadChecks(checksfile).sort();
     var out = {};
 
     for (var ii in checks) {
-        var present = $(checks[ii]).length > 0;
-        out[checks[ii]] = present;
+	var present = $(checks[ii]).length > 0;
+	out[checks[ii]] = present;
     }
 
     return out;
+};
+
+var checkUrlContent = function(url, checksfile) {
+
+    rest.get(url).on('complete', function(data) {
+
+	if (data instanceof Error) {
+	    console.error("The url %s does not exist.", url);
+	} else {
+	    var checks = loadChecks(checksfile);
+	    var out = {};
+	    $ = cheerio.load(data);
+	    for (var ii in checks) {
+		out[checks[ii]] = $(checks[ii]).length > 0;
+	    }
+
+	    console.log(JSON.stringify(out, null, 4));
+	}
+    });
+
+};
+
+// 1. asserts that only one of htmlfile and checksfile is defined
+// 2. check the one that's defined
+var assertOnlyOneOfFileOrUrl = function(htmlfile, url) {
+
+    if (htmlfile===undefined && url===undefined) {
+	console.error("At least one of file and url path must be defined. Exiting.");
+	process.exit(1);
+    } else if (!(htmlfile===undefined || url===undefined)) {
+	console.error("Only one of file and url paths can be defined. Exiting.");
+	process.exit(1);
+    }
 };
 
 var clone = function(fn) {
@@ -67,12 +106,21 @@ var clone = function(fn) {
 
 if (require.main == module) {
     program
-        .option('-c, --checks <check_file>', 'Path to checks.json', clone(assertFileExists), CHECKSFILE_DEFAULT)
-        .option('-f, --file <html_file>', 'Path to index.html', clone(assertFileExists), HTMLFILE_DEFAULT)
-        .parse(process.argv);
-    var checkJson = checkHtmlFile(program.file, program.checks);
-    var outJson = JSON.stringify(checkJson, null, 4);
-    console.log(outJson);
+	.option('-c, --checks <check_file>', 'Path to checks.json', clone(assertFileExists), CHECKSFILE_DEFAULT)
+	.option('-f, --file <html_file>', 'Path to index.html', clone(assertFileExists))
+	.option('-u, --url <url_path>', 'Url address')
+	.parse(process.argv);
+
+    assertOnlyOneOfFileOrUrl(program.file, program.url);
+
+    if (program.file) {
+	var checkJson = checkHtmlFile(program.file, program.checks);
+	var outJson = JSON.stringify(checkJson, null, 4);
+	console.log(outJson);
+    } else {
+	checkUrlContent(program.url, program.checks);
+    }
 } else {
     exports.checkHtmlFile = checkHtmlFile;
+    exports.checkUrlContent = checkUrlContent;
 }
