@@ -55,15 +55,8 @@ var loadChecks = function(checksfile) {
 var checkHtmlFile = function(htmlfile, checksfile) {
 
     $ = cheerioHtmlFile(htmlfile);
-    var checks = loadChecks(checksfile).sort();
-    var out = {};
 
-    for (var ii in checks) {
-	var present = $(checks[ii]).length > 0;
-	out[checks[ii]] = present;
-    }
-
-    return out;
+    return checkCheerioData($, checksfile);
 };
 
 var checkUrlContent = function(url, checksfile) {
@@ -73,16 +66,24 @@ var checkUrlContent = function(url, checksfile) {
 	if (data instanceof Error) {
 	    console.error("The url %s does not exist.", url);
 	} else {
-	    var checks = loadChecks(checksfile);
-	    var out = {};
 	    $ = cheerio.load(data);
-	    for (var ii in checks) {
-		out[checks[ii]] = $(checks[ii]).length > 0;
-	    }
-
+	    var out = checkCheerioData($, checksfile);
 	    console.log(JSON.stringify(out, null, 4));
 	}
     });
+
+};
+
+var checkCheerioData = function(cheerioDataFunc, checksfile) {
+
+    var checks = loadChecks(checksfile);
+    var out = {};
+
+    for (var ii in checks) {
+	out[checks[ii]] = $(checks[ii]).length > 0;
+    }
+
+    return out;
 
 };
 
